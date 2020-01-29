@@ -1,0 +1,189 @@
+
+let width = 1000;
+let height = 600;
+let padding = 80;
+
+
+
+let colors = (n) =>{
+  if(n>3 && n<12){
+    return'#6495ED' 
+  }
+  else if(n>12 && n<21){
+    return'#4682B4'
+  }
+  else if(n>21 && n<30){
+    return'#4169E1'
+  }
+  else if(n>30 &&n<39){
+    return'#0000FF'
+  }
+  else if(n>39 && n<48){
+    return'#0000CD'
+  }
+  else if(n>48 && n<57){
+    return'#00008B'
+  }
+  else if(n>57 && n<66){
+    return'#000080'
+  }
+  else if(n>66)
+    return'#191970'
+}
+
+let container = d3.select('body')
+  .append('div')
+  .attr('class','container');
+  
+let map = container.append('div')
+  .attr('class','map');
+
+const title = map.append('div')
+  .attr('id','title')
+  .text("United States Educational Attainment");
+
+const description = map.append('div')
+  .attr('id','description')
+  .text("Percentage of adults age 25 and older with a bachelor's degree or higher (2010-2014)");
+
+let svg = map.append('svg')
+  .attr('width', width)
+  .attr('height', height)
+  .append('g')
+  .attr('transform', 'translate(45, 0)');
+
+//Creates a new geographic path generator with the default settings: the albersUsa projection and a point radius of 4.5 pixels.
+var path = d3.geoPath()
+ 
+// legend
+//Constructs a new threshold scale with the specified domain and range.
+let threshold = d3.scaleThreshold()
+  .domain([3, 12, 21, 30, 39, 48, 57, 66])
+    .range(["none",'#6495ED','#4682B4','#4169E1','#0000FF','#0000CD','#00008B','#000080','#191970'])
+
+let legendX = d3.scaleLinear()
+  .domain([4, 70])
+  .range([20, 280]);
+
+let legendAxis = d3.axisBottom(legendX)
+  .tickSize(20)
+  .tickValues(threshold.domain())
+  .tickFormat((d) => d + '%' );
+
+
+let legend = map.append("svg")
+  .attr('width', 300)
+  .attr('height', 50)
+  .attr('id', 'legend');
+
+ legend.append('g')
+  .attr('transform','translate(5, 20)')
+  .call(legendAxis)
+  .select('.domain')
+  .remove();
+
+legend.selectAll('rect')
+  .data(threshold.range().map(function(color){
+    var d = threshold.invertExtent(color);
+    if(d[0]== null) { d[0] = legendX.domain()[0] }
+    if(d[1]== null) { d[1] = legendX.domain()[1] }
+    return d
+  }))
+  .enter()
+  .append('rect')
+  .attr('height', 20)
+  .attr('width', 36)
+  .attr('x',(d)=> legendX(d[0])+5 )
+  .attr('y', 15)
+  .attr('fill', (d)=> threshold(d[0]));
+
+// End of the legend
+var body = d3.select("body");
+// tooltip
+ let tooltip = body.append('div')
+  .attr('id', 'tooltip')
+  .attr('class','tooltip')
+  .style('opacity', 0);
+
+// JSON files
+ const dataCounty = 'https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/counties.json'
+ const dataEducation ='https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/for_user_education.json'
+ 
+ 
+d3.queue()
+  .defer(d3.json, dataCounty)
+  .defer(d3.json, dataEducation)
+  .await(makeMap);
+
+function makeMap(error, us, education){
+  if(error) throw error;
+  
+  svg.selectAll('path')
+    .data(topojson.feature(us, us.objects.counties).features)
+    .enter().append('path')
+    .attr('class', 'county')
+    .attr('data-fips', (d) => d.id)
+    .attr('data-education',function(d){
+      let s = education.filter( (obj)=> obj.fips === d.id);
+      if(s[0]) {
+        return s[0].bachelorsOrHigher;
+      }
+    })
+    .attr('fill', function(d){
+      let s = education.filter( (obj)=> obj.fips === d.id);
+      if(s[0]) {
+        return colors(s[0].bachelorsOrHigher);
+      }
+    })
+    .on('mouseover',function(d){
+      tooltip.style('opacity',.8)
+      tooltip.html(function(){
+        var result = education.filter((obj) => obj.fips === d.id)
+        if(result[0]){
+          return result[0].area_name+', '+result[0].state+' : '+result[0].bachelorsOrHigher
+        }
+      })
+        .attr('data-education',function(){
+          let s = education.filter( (obj)=> obj.fips === d.id);
+          if(s[0]) {
+            return s[0].bachelorsOrHigher;
+          }
+        })
+        .style('left', (d3.event.pageX+10)+'px')
+        .style('top',  (d3.event.pageY-28)+'px')
+    })
+    .on('mouseout',function(d){
+      tooltip.style('opacity',0)
+    
+    })
+    .attr('d', path);
+  
+  let author = map.append('div')
+    .attr('id','source')
+    .text('Source : ');
+  
+  author.append('a')
+    .attr('href', 'https://www.ers.usda.gov/data-products/county-level-data-sets/download-data.aspx')
+    .attr('target', '_blank')
+    .text('USDA Economic Research Service'); 
+  
+  author.append('div')
+    .text('Author : ')
+    .append('a')
+    .attr('href', 'https://github.com/messaismael')
+    .attr('target','blank')
+    .attr('class', 'author')
+    .text('by Ismael')
+  
+    
+  
+  svg.append("path")
+    .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a !== b; }))
+    .attr("class", "states")
+    .attr("d", path);
+    
+}
+
+
+
+
